@@ -136,6 +136,7 @@ class MainCliTest(unittest.TestCase):
 
         env = {k: v for k, v in os.environ.items() if not k.startswith("DOUBAO_")}
         env["PYTHONIOENCODING"] = "utf-8"
+        env["DOUBAO_NO_DOTENV"] = "1"
         env.update(env_extra)
         proc = subprocess.run(
             [sys.executable, str(ROOT / "main.py"), "--check"],

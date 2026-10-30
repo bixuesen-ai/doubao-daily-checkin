@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -67,6 +68,46 @@ class TestClassify(unittest.TestCase):
         status, _ = client._classify(200, '{"data":{"checkin_status":1}}')
         self.assertEqual(status, SUCCESS)
 
+    def test_real_success_json_response(self):
+        body = json.dumps({
+            "data": {
+                "checked_in": True,
+                "checkin_date": "2026-10-31",
+                "continuous_days": 2,
+                "idempotent": False,
+                "reward_amount": 200,
+                "reward_code": "quota_grant",
+                "reward_status": 3,
+                "reward_type": "quota_grant",
+            },
+            "code": 0,
+            "msg": "",
+            "message": "",
+        }, ensure_ascii=False)
+        client = make_client(success_json_path=["data.checked_in=true"])
+        status, message = client._classify(200, body)
+        self.assertEqual(status, SUCCESS)
+        self.assertIn("JSON", message)
+        self.assertEqual(_extract_amount(body), "200")
+
+    def test_real_idempotent_response_is_already(self):
+        body = json.dumps({
+            "data": {"checked_in": True, "idempotent": True, "reward_amount": 200},
+            "code": 0,
+        })
+        client = make_client(
+            success_json_path=["data.checked_in=true"],
+            already_json_path=["data.idempotent=true"],
+        )
+        status, _ = client._classify(200, body)
+        self.assertEqual(status, ALREADY)
+
+    def test_business_error_code_is_not_success_on_200(self):
+        body = '{"data":null,"code":710010702,"msg":"系统错误","message":"system error"}'
+        status, message = make_client()._classify(200, body)
+        self.assertEqual(status, FAILED)
+        self.assertIn("710010702", message)
+
     def test_json_path_not_match(self):
         client = make_client(success_json_path=["data.checkin_status=1"])
         status, _ = client._classify(200, '{"data":{"checkin_status":0},"msg":"ok"}')
@@ -84,6 +125,10 @@ class TestRetryPolicy(unittest.TestCase):
         client = make_client()
         self.assertTrue(client._should_retry(FAILED, 500))
         self.assertTrue(client._should_retry(FAILED, 0))
+
+    def test_no_retry_on_business_200_error(self):
+        client = make_client()
+        self.assertFalse(client._should_retry(FAILED, 200))
 
     def test_no_retry_on_business_4xx(self):
         client = make_client()
