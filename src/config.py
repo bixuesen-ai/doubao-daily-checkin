@@ -28,6 +28,8 @@ class ConfigError(Exception):
 
 def _load_dotenv() -> None:
     """优先用 python-dotenv，没装则用内置的简易解析，保证零依赖也能跑。"""
+    if os.getenv("DOUBAO_NO_DOTENV") == "1":
+        return
     env_path = Path(".env")
     if not env_path.exists():
         return
@@ -94,6 +96,7 @@ class Config:
     auth_keywords: list = field(default_factory=lambda: list(DEFAULT_AUTH_KEYWORDS))
     risk_keywords: list = field(default_factory=lambda: list(DEFAULT_RISK_KEYWORDS))
     success_json_path: list = field(default_factory=list)
+    already_json_path: list = field(default_factory=list)
 
     # —— 通知 ——
     notify_channels: list = field(default_factory=list)
@@ -162,6 +165,7 @@ def load_config() -> Config:
         auth_keywords=_split_list(_get("DOUBAO_AUTH_KEYWORDS")) or list(DEFAULT_AUTH_KEYWORDS),
         risk_keywords=_split_list(_get("DOUBAO_RISK_KEYWORDS")) or list(DEFAULT_RISK_KEYWORDS),
         success_json_path=_split_list(_get("DOUBAO_SUCCESS_JSON_PATH")),
+        already_json_path=_split_list(_get("DOUBAO_ALREADY_JSON_PATH")),
         notify_channels=_split_list(_get("DOUBAO_NOTIFY")),
         notify_on_already=_get("DOUBAO_NOTIFY_ON_ALREADY", default="0") in {"1", "true", "yes"},
     )

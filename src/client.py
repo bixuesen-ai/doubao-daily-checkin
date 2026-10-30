@@ -108,7 +108,7 @@ def _extract_amount(text: str) -> str:
     patterns = [
         r"[+＋]\s*(\d+)\s*(?:活动)?额度",
         r"(?:获得|领取|赠送)[^\d]{0,6}(\d+)\s*(?:活动)?额度",
-        r"\"(?:amount|credit|quota|reward)\"\s*:\s*(\d+)",
+        r"\"(?:amount|credit|quota|reward|reward_amount)\"\s*:\s*(\d+)",
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
@@ -124,18 +124,26 @@ class CheckinClient:
     def _classify(self, http_status: int, text: str) -> tuple[str, str]:
         lowered = text.lower()
 
+        try:
+            data: Any = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            data = None
+
         # 先判「已签到」：响应里往往同时包含「签到」字样，顺序错了会误判成成功
         for keyword in self.config.already_keywords:
             if keyword.lower() in lowered:
                 return ALREADY, f"今日已签到（命中关键词：{keyword}）"
 
+        # 已签到 JSON 规则：优先于成功规则，避免把幂等重放判成新领取
+        if self.config.already_json_path:
+            verdict = _check_json_path(data, self.config.already_json_path)
+            if verdict is True:
+                return ALREADY, "今日已签到（JSON 规则命中）"
+
         # 再用 JSON 规则判定（比关键词准，优先于成功关键词）
         verdict = None
         if self.config.success_json_path:
-            try:
-                verdict = _check_json_path(json.loads(text), self.config.success_json_path)
-            except (json.JSONDecodeError, TypeError):
-                verdict = None
+            verdict = _check_json_path(data, self.config.success_json_path)
         if verdict is True:
             return SUCCESS, "签到成功（JSON 规则命中）"
 
@@ -151,6 +159,13 @@ class CheckinClient:
             if keyword.lower() in lowered:
                 return AUTH_FAILED, f"Cookie 可能已失效（命中关键词：{keyword}）"
 
+        # 部分接口 HTTP 200 但业务 code 非 0；不能落到 2xx 兜底误判成功。
+        if isinstance(data, dict) and "code" in data:
+            code = data.get("code")
+            if str(code).strip() != "0":
+                biz_message = data.get("msg") or data.get("message") or ""
+                return FAILED, f"业务请求失败 code={code}，{biz_message}".strip("，")
+
         if 200 <= http_status < 300:
             return SUCCESS, "签到请求返回 2xx（未配置关键词，按成功处理）"
 
@@ -159,8 +174,12 @@ class CheckinClient:
     def _should_retry(self, status: str, http_status: int) -> bool:
         if status in (SUCCESS, ALREADY, AUTH_FAILED):
             return False
-        # 业务明确说不行的（4xx）别硬撞，其余重试
-        return not (400 <= http_status < 500 and http_status not in (408, 429))
+        if status == RISK:
+            return http_status == 429
+        if status == FAILED:
+            # 只重试网络层异常（状态码 0）和 5xx；HTTP 200 包裹的业务错误不重复请求。
+            return http_status == 0 or 500 <= http_status < 600
+        return False
 
     def run(self) -> CheckinResult:
         last: CheckinResult | None = None
