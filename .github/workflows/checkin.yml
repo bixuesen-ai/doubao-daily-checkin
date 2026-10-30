@@ -48,6 +48,7 @@ jobs:
           DOUBAO_SUCCESS_KEYWORDS: ${{ secrets.DOUBAO_SUCCESS_KEYWORDS }}
           DOUBAO_ALREADY_KEYWORDS: ${{ secrets.DOUBAO_ALREADY_KEYWORDS }}
           DOUBAO_SUCCESS_JSON_PATH: ${{ secrets.DOUBAO_SUCCESS_JSON_PATH }}
+          DOUBAO_ALREADY_JSON_PATH: ${{ secrets.DOUBAO_ALREADY_JSON_PATH }}
           # ---- 通知（可选）----
           DOUBAO_NOTIFY: ${{ secrets.DOUBAO_NOTIFY }}
           DOUBAO_NOTIFY_ON_ALREADY: ${{ secrets.DOUBAO_NOTIFY_ON_ALREADY }}
