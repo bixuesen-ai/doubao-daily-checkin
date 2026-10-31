@@ -207,6 +207,19 @@ class TestCookieExtraction(unittest.TestCase):
         )
         self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
 
+    def test_extract_cookie_from_unquoted_header(self):
+        curl = 'curl https://www.doubao.com/chat/ -H cookie:sessionid=abc;sid=def'
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc;sid=def")
+
+    def test_extract_cookie_from_header_after_other_headers(self):
+        curl = (
+            'curl "https://www.doubao.com/chat/" '
+            '-H "accept: application/json" '
+            '-H "x-app: doubao" '
+            '-H "cookie: sessionid=abc; sid=def"'
+        )
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
     def test_extract_cookie_from_cookie_flag(self):
         curl = 'curl "https://www.doubao.com/chat/" --cookie "sessionid=abc; sid=def"'
         self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
