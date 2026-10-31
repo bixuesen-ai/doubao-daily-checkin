@@ -66,13 +66,25 @@ def _split_list(raw: str) -> list[str]:
 
 
 _COOKIE_HEADER_RE = re.compile(
-    r"""-H\s+(?:"|')cookie:\s*(?P<value>.*?)(?:"|')(?:\s+(?:-|$)|$)""",
-    re.IGNORECASE,
+    r"""-H\s+(?:"|')cookie:\s*(?P<value>.*?)(?:"|')(?:\s|$)""",
+    re.IGNORECASE | re.DOTALL,
 )
 _COOKIE_FLAG_RE = re.compile(
     r"""(?:--cookie|-b)\s+(?:"|')(?P<value>.*?)(?:"|')""",
-    re.IGNORECASE,
+    re.IGNORECASE | re.DOTALL,
 )
+
+
+def _normalize_curl(raw: str) -> str:
+    """把多行 cURL、bash 反斜杠续行和 Windows cmd 续行折叠成单行。"""
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"\\\n", " ", text)
+    text = re.sub(r"\^\n", " ", text)
+    text = re.sub(r"\n", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if text.startswith("$"):
+        text = text[1:].strip()
+    return text
 
 
 def _strip_quoted_value(value: str) -> str:
@@ -89,14 +101,20 @@ def _extract_cookie(raw: str) -> str:
     普通 Cookie 字符串原样返回；cURL 命令则从 `-H "cookie: ..."`、
     `--cookie ...` 或 `-b ...` 中提取实际 Cookie。
     """
-    text = raw.strip()
-    looks_like_curl = text.startswith("curl ") or "-H " in text or "--cookie " in text or "-b " in text
+    text = _normalize_curl(raw)
+    looks_like_curl = (
+        text.lower().startswith("curl ")
+        or "curl " in text.lower()
+        or "-h " in text.lower()
+        or "--cookie " in text.lower()
+        or "-b " in text.lower()
+    )
     if not looks_like_curl:
         return text
 
     match = _COOKIE_HEADER_RE.search(text) or _COOKIE_FLAG_RE.search(text)
     if not match:
-        raise ConfigError("已识别为 cURL 命令，但没有在其中找到 Cookie 请求头；请重新复制一条已登录状态下的豆包请求。")
+        raise ConfigError("已识别为 cURL 命令，但没有在其中找到 Cookie 请求头；请重新复制一条已登录状态下的豆包 XHR/Fetch 请求。")
     return _strip_quoted_value(match.group("value"))
 
 
