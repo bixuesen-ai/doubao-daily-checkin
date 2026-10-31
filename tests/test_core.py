@@ -184,6 +184,29 @@ class TestCookieExtraction(unittest.TestCase):
         )
         self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
 
+    def test_extract_cookie_from_multiline_bash_curl(self):
+        curl = (
+            "curl 'https://www.doubao.com/chat/' \\\n"
+            "  -H 'accept: application/json' \\\n"
+            "  -H 'Cookie: sessionid=abc; sid=def'"
+        )
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
+    def test_extract_cookie_from_windows_caret_continuation(self):
+        curl = (
+            'curl "https://www.doubao.com/chat/" ^\n'
+            '  -H "accept: application/json" ^\n'
+            '  -H "cookie: sessionid=abc; sid=def"'
+        )
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
+    def test_extract_cookie_with_leading_dollar_prompt(self):
+        curl = (
+            '$ curl "https://www.doubao.com/chat/" '
+            '-H "cookie: sessionid=abc; sid=def"'
+        )
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
     def test_extract_cookie_from_cookie_flag(self):
         curl = 'curl "https://www.doubao.com/chat/" --cookie "sessionid=abc; sid=def"'
         self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
