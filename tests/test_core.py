@@ -21,7 +21,7 @@ from src.client import (  # noqa: E402
     _dig,
     _extract_amount,
 )
-from src.config import Config  # noqa: E402
+from src.config import Config, ConfigError, _extract_cookie  # noqa: E402
 from src.logger import mask  # noqa: E402
 from src.notifier import build_message  # noqa: E402
 
@@ -160,6 +160,38 @@ class TestHelpers(unittest.TestCase):
         masked = mask("sessionid=abcdefghijklmn")
         self.assertNotIn("abcdefghij", masked)
         self.assertIn("len=", masked)
+
+
+class TestCookieExtraction(unittest.TestCase):
+    def test_raw_cookie_is_unchanged(self):
+        raw = "sessionid=abc; sid=def; uid=tt=xyz"
+        self.assertEqual(_extract_cookie(raw), raw)
+
+    def test_extract_cookie_from_windows_curl_cmd(self):
+        curl = (
+            'curl "https://www.doubao.com/chat/" '
+            '-H "accept: application/json" '
+            '-H "cookie: sessionid=abc; sid=def" '
+            "--compressed"
+        )
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
+    def test_extract_cookie_from_bash_curl(self):
+        curl = (
+            "curl 'https://www.doubao.com/chat/' "
+            "-H 'accept: application/json' "
+            "-H 'cookie: sessionid=abc; sid=def'"
+        )
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
+    def test_extract_cookie_from_cookie_flag(self):
+        curl = 'curl "https://www.doubao.com/chat/" --cookie "sessionid=abc; sid=def"'
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
+    def test_curl_without_cookie_raises_clear_error(self):
+        curl = 'curl "https://www.doubao.com/chat/" -H "accept: application/json"'
+        with self.assertRaises(ConfigError):
+            _extract_cookie(curl)
 
 
 class TestNotifyMessage(unittest.TestCase):
