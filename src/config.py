@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -64,6 +65,41 @@ def _split_list(raw: str) -> list[str]:
     return [item.strip() for item in raw.replace("，", ",").split(",") if item.strip()]
 
 
+_COOKIE_HEADER_RE = re.compile(
+    r"""-H\s+(?:"|')cookie:\s*(?P<value>.*?)(?:"|')(?:\s+(?:-|$)|$)""",
+    re.IGNORECASE,
+)
+_COOKIE_FLAG_RE = re.compile(
+    r"""(?:--cookie|-b)\s+(?:"|')(?P<value>.*?)(?:"|')""",
+    re.IGNORECASE,
+)
+
+
+def _strip_quoted_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    # Windows cmd 会把命令字符串里的双引号写成两个双引号。
+    return value.replace('""', '"')
+
+
+def _extract_cookie(raw: str) -> str:
+    """支持直接粘贴 DevTools 复制出的 cURL 命令，自动提取 Cookie 请求头。
+
+    普通 Cookie 字符串原样返回；cURL 命令则从 `-H "cookie: ..."`、
+    `--cookie ...` 或 `-b ...` 中提取实际 Cookie。
+    """
+    text = raw.strip()
+    looks_like_curl = text.startswith("curl ") or "-H " in text or "--cookie " in text or "-b " in text
+    if not looks_like_curl:
+        return text
+
+    match = _COOKIE_HEADER_RE.search(text) or _COOKIE_FLAG_RE.search(text)
+    if not match:
+        raise ConfigError("已识别为 cURL 命令，但没有在其中找到 Cookie 请求头；请重新复制一条已登录状态下的豆包请求。")
+    return _strip_quoted_value(match.group("value"))
+
+
 def _parse_json_env(raw: str, name: str) -> dict:
     if not raw:
         return {}
@@ -110,12 +146,12 @@ class Config:
 def load_config() -> Config:
     _load_dotenv()
 
-    cookie = _get("DOUBAO_COOKIE", "COOKIE")
+    cookie = _extract_cookie(_get("DOUBAO_COOKIE", "COOKIE"))
     url = _get("DOUBAO_CHECKIN_URL", "CHECKIN_URL")
 
     if not cookie:
         raise ConfigError(
-            "缺少 DOUBAO_COOKIE：请把浏览器里豆包的 Cookie 填进环境变量或 .env。"
+            "缺少 DOUBAO_COOKIE：请把浏览器中豆包的 Cookie，或 DevTools 复制出的 cURL 命令填进环境变量或 .env。"
         )
     if not url:
         raise ConfigError(
