@@ -73,6 +73,10 @@ _COOKIE_FLAG_RE = re.compile(
     r"""(?:--cookie|-b)\s+(?:"|')(?P<value>.*?)(?:"|')""",
     re.IGNORECASE | re.DOTALL,
 )
+_HEADER_SEGMENT_RE = re.compile(
+    r"""-H\s+("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s-][^\s]*)""",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _normalize_curl(raw: str) -> str:
@@ -113,9 +117,16 @@ def _extract_cookie(raw: str) -> str:
         return text
 
     match = _COOKIE_HEADER_RE.search(text) or _COOKIE_FLAG_RE.search(text)
-    if not match:
-        raise ConfigError("已识别为 cURL 命令，但没有在其中找到 Cookie 请求头；请重新复制一条已登录状态下的豆包 XHR/Fetch 请求。")
-    return _strip_quoted_value(match.group("value"))
+    if match:
+        return _strip_quoted_value(match.group("value"))
+
+    # 兜底：逐条解析 -H 请求头，兼容不同 DevTools 复制出的引号和换行格式。
+    for segment in _HEADER_SEGMENT_RE.finditer(text):
+        header = _strip_quoted_value(segment.group(1))
+        if header.lower().startswith("cookie:"):
+            return header.split(":", 1)[1].strip()
+
+    raise ConfigError("已识别为 cURL 命令，但没有在其中找到 Cookie 请求头；请重新复制一条已登录状态下的豆包 XHR/Fetch 请求。")
 
 
 def _parse_json_env(raw: str, name: str) -> dict:
