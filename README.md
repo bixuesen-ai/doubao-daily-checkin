@@ -35,7 +35,7 @@
 | 🧠 智能判定 | 关键词 + JSON 字段双重判定，兼容接口返回 `\u7b7e\u5230` 转义中文 |
 | 🛡️ 凭据安全 | Cookie 只存 GitHub Secrets，日志全程脱敏，仓库里不存在任何明文 |
 | 📮 多渠道通知 | Server 酱 / 企业微信机器人 / Telegram / Bark / 自定义 Webhook |
-| 🧪 可测试 | 32 项单元 + 端到端测试，本地起假接口就能验证整条链路 |
+| 🧪 可测试 | 37 项单元 + 端到端测试，本地起假接口就能验证整条链路 |
 | 🔧 配置驱动 | 接口地址、请求体、判定关键词全部走环境变量，官方改版改配置即可，不用改代码 |
 | 🩺 保活机制 | 每月自动心跳提交，避免公开仓库 60 天无活动导致定时任务被暂停 |
 
@@ -59,7 +59,7 @@
 4. 回到豆包页面，点一下「签到」
 5. 控制台会直接打印出可以粘贴的配置，以及接口的原始响应
 
-如果你已经知道接口地址，也可以跳过脚本，直接在 `Network` 面板里找到那条请求，右键 → `Copy as cURL`，从中取出 URL、请求体和 Cookie。
+如果你不熟悉 Request Headers 里的 Cookie 行，也可以直接在 `Network` 面板里右键一条已登录状态下的豆包请求 → `Copy` → `Copy as cURL (cmd)`，把整段 cURL 粘贴到 `DOUBAO_COOKIE`；脚本会自动从中提取 Cookie，不需要手工拆分。
 
 ### 第 3 步：配置 Secrets
 
@@ -67,7 +67,7 @@
 
 | Name | Value |
 | --- | --- |
-| `DOUBAO_COOKIE` | 浏览器里豆包的完整 Cookie 字符串 |
+| `DOUBAO_COOKIE` | 完整 Cookie 字符串；也可直接粘贴 `Copy as cURL (cmd)` 整段命令，脚本自动提取 Cookie |
 | `DOUBAO_CHECKIN_URL` | 签到接口的完整地址，`https://` 开头 |
 
 按抓包结果，可能还需要补 `DOUBAO_CHECKIN_METHOD`、`DOUBAO_CHECKIN_BODY`、`DOUBAO_EXTRA_HEADERS`。
@@ -101,7 +101,7 @@
 
 | 变量 | 说明 |
 | --- | --- |
-| `DOUBAO_COOKIE` | 豆包登录后的完整 Cookie，**最关键的凭据** |
+| `DOUBAO_COOKIE` | 豆包登录后的完整 Cookie；也支持粘贴整段 cURL 命令，由脚本自动提取 Cookie，**最关键的凭据** |
 | `DOUBAO_CHECKIN_URL` | 签到接口地址 |
 
 ### 请求参数
@@ -155,7 +155,7 @@ git clone https://github.com/<your-name>/doubao-daily-checkin.git
 cd doubao-daily-checkin
 
 cp .env.example .env
-# 编辑 .env，填入 DOUBAO_COOKIE 和 DOUBAO_CHECKIN_URL
+# 编辑 .env，填入 DOUBAO_COOKIE（Cookie 或 cURL 命令均可）和 DOUBAO_CHECKIN_URL
 
 python main.py --check     # 只检查配置是否完整
 python main.py --dry-run   # 只打印请求，不发出去
