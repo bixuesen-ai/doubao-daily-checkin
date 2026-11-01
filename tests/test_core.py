@@ -200,6 +200,18 @@ class TestCookieExtraction(unittest.TestCase):
         )
         self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
 
+    def test_extract_cookie_from_windows_escaped_header_quotes(self):
+        curl = (
+            'curl --url ^"https://www.doubao.com/chat/^" ^\n'
+            '  -H ^"accept: application/json^" ^\n'
+            '  -H ^"cookie: sessionid=abc; sid=def^"'
+        )
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
+    def test_extract_cookie_from_windows_escaped_b_cookie_flag(self):
+        curl = 'curl --url ^"https://www.doubao.com/chat/^" -b ^"sessionid=abc; sid=def^"'
+        self.assertEqual(_extract_cookie(curl), "sessionid=abc; sid=def")
+
     def test_extract_cookie_with_leading_dollar_prompt(self):
         curl = (
             '$ curl "https://www.doubao.com/chat/" '
@@ -226,8 +238,11 @@ class TestCookieExtraction(unittest.TestCase):
 
     def test_curl_without_cookie_raises_clear_error(self):
         curl = 'curl "https://www.doubao.com/chat/" -H "accept: application/json"'
-        with self.assertRaises(ConfigError):
+        with self.assertRaises(ConfigError) as ctx:
             _extract_cookie(curl)
+        message = str(ctx.exception)
+        self.assertIn("host=www.doubao.com", message)
+        self.assertIn("请求头数量=1", message)
 
 
 class TestNotifyMessage(unittest.TestCase):
