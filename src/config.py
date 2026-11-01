@@ -11,6 +11,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 DEFAULT_SUCCESS_KEYWORDS = ["签到成功", "领取成功", "签到完成", "success"]
 DEFAULT_ALREADY_KEYWORDS = ["已签到", "已经签到", "今日已领", "重复签到", "already"]
@@ -82,10 +83,12 @@ _HEADER_SEGMENT_RE = re.compile(
 def _normalize_curl(raw: str) -> str:
     """把多行 cURL、bash 反斜杠续行和 Windows cmd 续行折叠成单行。"""
     text = raw.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"\\\n", " ", text)
-    text = re.sub(r"\^\n", " ", text)
+    text = re.sub(r"\\\s*\n", " ", text)
+    text = re.sub(r"\^\s*\n", " ", text)
     text = re.sub(r"\n", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    # Windows cmd 会把命令里的特殊字符写成 ^"、^%、^;、^& 等转义形式。
+    text = re.sub(r"\^([\"%&;<>|^!])", r"\1", text)
     if text.startswith("$"):
         text = text[1:].strip()
     return text
@@ -97,6 +100,15 @@ def _strip_quoted_value(value: str) -> str:
         value = value[1:-1]
     # Windows cmd 会把命令字符串里的双引号写成两个双引号。
     return value.replace('""', '"')
+
+
+def _curl_diagnostics(text: str) -> str:
+    """生成不含 Cookie 明文的 cURL 诊断信息，用于判断是否选错请求。"""
+    urls = re.findall(r"(?:https?://[^\s'\"^]+)", text)
+    host = urlparse(urls[0]).netloc if urls else "未解析到"
+    header_count = len(_HEADER_SEGMENT_RE.findall(text))
+    has_cookie_flag = bool(re.search(r"(?:--cookie|-b)\s+", text, re.IGNORECASE))
+    return f"host={host}，请求头数量={header_count}，--cookie/-b={'是' if has_cookie_flag else '否'}"
 
 
 def _extract_cookie(raw: str) -> str:
@@ -126,7 +138,13 @@ def _extract_cookie(raw: str) -> str:
         if header.lower().startswith("cookie:"):
             return header.split(":", 1)[1].strip()
 
-    raise ConfigError("已识别为 cURL 命令，但没有在其中找到 Cookie 请求头；请重新复制一条已登录状态下的豆包 XHR/Fetch 请求。")
+    diagnostics = _curl_diagnostics(text)
+    raise ConfigError(
+        "已识别为 cURL 命令，但没有在其中找到 Cookie 请求头。"
+        f"诊断信息（不含 Cookie 明文）：{diagnostics}。"
+        "请选择一条已登录状态下发给 www.doubao.com 的 Fetch/XHR 请求；"
+        "先在右侧 Request Headers 中看到 cookie: 行，再右键 Copy as cURL (cmd)。"
+    )
 
 
 def _parse_json_env(raw: str, name: str) -> dict:
